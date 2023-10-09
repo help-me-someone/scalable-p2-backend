@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 )
@@ -44,6 +45,6 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Let's just log, I don't know what is going on.
-		log.Println(msg)
+		fmt.Fprintf(w, "%v\n", msg)
 	}
 }

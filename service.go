@@ -73,6 +73,6 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	return aws.StringValue(&result.Location), nil
+	return fmt.Sprintf("Successfully stored %v at %v", file_name, aws.StringValue(&result.Location)), nil
 
 }

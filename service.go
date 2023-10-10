@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -28,6 +29,7 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 	endpoint := "sgp1.digitaloceanspaces.com"
 	region := "sgp1"
 	myBucket := "toktik-videos"
+	expiryDate := time.Now().AddDate(0, 0, 1)
 
 	// Get multipart file.
 	f := ctx.Value("file")
@@ -59,14 +61,17 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 		Region:   &region,
 	}))
 
-	// Create an uploader with the session and default options
+	// Create an uploader with the session and default options.
 	uploader := s3manager.NewUploader(sess)
 
+	// This uploader will intelligently buffer large file into chunks
+	// and concurrently send them in parallel through multiple goroutines.
 	result, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket:      aws.String(myBucket),
 		Key:         aws.String(file_name),
 		ContentType: aws.String(http.DetectContentType(file_buffer)),
 		Body:        bytes.NewReader(file_buffer),
+		Expires:     &expiryDate,
 	})
 
 	if err != nil {

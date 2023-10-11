@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -52,12 +53,25 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("Invalid multipart header type. Could not covert to multipart header.")
 	}
 
+	// Get username
+	uname := ctx.Value("username")
+	if uname == nil {
+		return "", fmt.Errorf("Name not given.")
+	}
+	username, ok := uname.(string)
+	if !ok {
+		return "", fmt.Errorf("Could not convert username to string.")
+	}
+
+	// If file name is not given, take the actual filename.
 	file_name := file_header.Filename
+	if fname := ctx.Value("file_name"); fname != nil {
+		file_name = fname.(string)
+	}
+
 	file_size := file_header.Size
 	file_buffer := make([]byte, file_size)
 	file.Read(file_buffer)
-
-	log.Printf("==== Filename: %s\n", file_name)
 
 	sess := session.Must(session.NewSession(&aws.Config{
 		Endpoint: &endpoint,
@@ -71,7 +85,7 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 	// and concurrently send them in parallel through multiple goroutines.
 	result, err := uploader.Upload(&s3manager.UploadInput{
 		Bucket:      aws.String(myBucket),
-		Key:         aws.String(file_name),
+		Key:         aws.String(strings.Join([]string{"video", username, file_name}, "/")),
 		ContentType: aws.String(http.DetectContentType(file_buffer)),
 		Body:        bytes.NewReader(file_buffer),
 		Expires:     &expiryDate,
@@ -81,6 +95,5 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 		log.Println("Failed the upload.")
 		return "", err
 	}
-
 	return fmt.Sprintf("Successfully stored %v at %v", file_name, aws.StringValue(&result.Location)), nil
 }

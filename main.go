@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"log"
 	"net/http"
 )
@@ -14,19 +14,21 @@ func main() {
 }
 
 func upload(w http.ResponseWriter, r *http.Request) {
-	log.Println("UPLOAD HANDLER")
-
-	username, ok := r.Context().Value("username").(string)
-	if !ok {
-		log.Println("Can't username convert to string")
-	} else {
-		log.Printf("Username: %s\n", username)
-	}
-
-	log.Printf("message: %s\n", r.Context().Value("message"))
-	log.Printf("username: %s\n", r.Context().Value("username"))
-
 	if r.Method == "POST" || r.Method == "OPTIONS" {
+
+		username := r.Header.Get("username")
+
+		// No username...
+		if len(username) == 0 {
+			log.Println("Username is not found in request headers.")
+			w.WriteHeader(http.StatusUnauthorized)
+			resp := map[string]interface{}{
+				"success": false,
+				"message": "user not specified",
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
+		}
 
 		svc := NewVideoUploadService()
 
@@ -39,7 +41,16 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			log.Println(err.Error())
 			log.Println("Can't parse multipart form.")
 			http.Error(w, err.Error(), http.StatusBadRequest)
+
+			resp := map[string]interface{}{
+				"success": false,
+				"message": "can't parse multipart form",
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
+
+		file_name := r.FormValue("file_name")
 
 		// Get the file from the request.
 		file, file_headers, err := r.FormFile("file")
@@ -47,30 +58,54 @@ func upload(w http.ResponseWriter, r *http.Request) {
 			log.Println("File not found.")
 			log.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			resp := map[string]interface{}{
+				"success": false,
+				"message": "file not found",
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 		defer file.Close()
 
 		// Create the context for our service.
 		ctx := context.Background()
 		ctx = context.WithValue(ctx, "file", file)
-		ctx = context.WithValue(ctx, "username", r.Context().Value("username"))
+		ctx = context.WithValue(ctx, "file_name", file_name)
+		ctx = context.WithValue(ctx, "username", username)
 		ctx = context.WithValue(ctx, "file_header", file_headers)
 
-		log.Printf("Username: %s\n", ctx.Value("username"))
-
 		// Perform the service.
-		msg, err := svc.Action(ctx)
+		_, err = svc.Action(ctx)
 
 		if err != nil {
 			log.Println("Action failed.")
 			log.Println(err.Error())
 			http.Error(w, err.Error(), http.StatusBadRequest)
+
+			resp := map[string]interface{}{
+				"success": false,
+				"message": err.Error(),
+			}
+			json.NewEncoder(w).Encode(resp)
+			return
 		}
 
+		resp := map[string]interface{}{
+			"success": true,
+			"message": "successfully uploaded",
+		}
+		json.NewEncoder(w).Encode(resp)
+
 		// Let's just log, I don't know what is going on.
-		log.Println(msg)
-		fmt.Fprintf(w, "%v\n", msg)
+		// log.Println(msg)
 		return
 	}
 	log.Println("Incorrect method type.")
+
+	w.WriteHeader(http.StatusBadRequest)
+	resp := map[string]interface{}{
+		"success": false,
+		"message": "incorrect method type",
+	}
+	json.NewEncoder(w).Encode(resp)
 }

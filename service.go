@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -56,6 +57,8 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 	file_buffer := make([]byte, file_size)
 	file.Read(file_buffer)
 
+	log.Printf("==== Filename: %s\n", file_name)
+
 	sess := session.Must(session.NewSession(&aws.Config{
 		Endpoint: &endpoint,
 		Region:   &region,
@@ -75,6 +78,7 @@ func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
 	})
 
 	if err != nil {
+		log.Println("Failed the upload.")
 		return "", err
 	}
 

@@ -1,22 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"log"
-	"mime/multipart"
-	"net/http"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type Service interface {
-	Action(context.Context) (string, error)
+	Action(client *s3.PresignClient) (string, error)
 }
 
 type VideoUploadService struct{}
@@ -25,75 +19,28 @@ func NewVideoUploadService() Service {
 	return &VideoUploadService{}
 }
 
-// This service will simply get the file information and
-// upload it to the S3 bucket on digital ocean.
-func (v *VideoUploadService) Action(ctx context.Context) (string, error) {
-	endpoint := "sgp1.digitaloceanspaces.com"
-	region := "sgp1"
-	myBucket := "toktik-videos"
+// This service will simply return the presigned url for the upload.
+func (v *VideoUploadService) Action(client *s3.PresignClient) (string, error) {
 	expiryDate := time.Now().AddDate(0, 0, 1)
+	presignExpiry := time.Hour * 1
 
-	// Get multipart file.
-	f := ctx.Value("file")
-	if f == nil {
-		return "", fmt.Errorf("File body not found.")
-	}
-	file, ok := f.(multipart.File)
-	if !ok {
-		return "", fmt.Errorf("Invalid file type. Could not covert to multipart file.")
+	putObjectArgs := &s3.PutObjectInput{
+		Bucket:  aws.String("toktik-videos"),
+		Key:     aws.String("mykeywhat"),
+		Expires: &expiryDate,
 	}
 
-	// Get multipart header.
-	mph := ctx.Value("file_header")
-	if mph == nil {
-		return "", fmt.Errorf("Multipart header not given.")
-	}
-	file_header, ok := mph.(*multipart.FileHeader)
-	if !ok {
-		return "", fmt.Errorf("Invalid multipart header type. Could not covert to multipart header.")
-	}
+	log.Println("Log: mykeywhat")
 
-	// Get username
-	uname := ctx.Value("username")
-	if uname == nil {
-		return "", fmt.Errorf("Name not given.")
-	}
-	username, ok := uname.(string)
-	if !ok {
-		return "", fmt.Errorf("Could not convert username to string.")
-	}
-
-	// If file name is not given, take the actual filename.
-	file_name := file_header.Filename
-	if fname := ctx.Value("file_name"); fname != nil {
-		file_name = fname.(string)
-	}
-
-	file_size := file_header.Size
-	file_buffer := make([]byte, file_size)
-	file.Read(file_buffer)
-
-	sess := session.Must(session.NewSession(&aws.Config{
-		Endpoint: &endpoint,
-		Region:   &region,
-	}))
-
-	// Create an uploader with the session and default options.
-	uploader := s3manager.NewUploader(sess)
-
-	// This uploader will intelligently buffer large file into chunks
-	// and concurrently send them in parallel through multiple goroutines.
-	result, err := uploader.Upload(&s3manager.UploadInput{
-		Bucket:      aws.String(myBucket),
-		Key:         aws.String(strings.Join([]string{"video", username, file_name}, "/")),
-		ContentType: aws.String(http.DetectContentType(file_buffer)),
-		Body:        bytes.NewReader(file_buffer),
-		Expires:     &expiryDate,
-	})
+	res, err := client.PresignPutObject(
+		context.Background(),
+		putObjectArgs,
+		s3.WithPresignExpires(presignExpiry),
+	)
 
 	if err != nil {
-		log.Println("Failed the upload.")
 		return "", err
 	}
-	return fmt.Sprintf("Successfully stored %v at %v", file_name, aws.StringValue(&result.Location)), nil
+
+	return res.URL, nil
 }

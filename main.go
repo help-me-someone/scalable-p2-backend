@@ -17,20 +17,26 @@ const (
 )
 
 func main() {
-	http.HandleFunc("/", upload)
+	http.HandleFunc("/", GetUploadPresignedUrl)
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", nil))
 }
 
-func upload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "PUT" {
+func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		log.Println("Error: Not GET request")
 		w.WriteHeader(http.StatusBadRequest)
 		resp := map[string]interface{}{
 			"success": false,
 			"message": "invalid method",
 		}
 		json.NewEncoder(w).Encode(resp)
+		return
 	}
+
+	// Enable cors. This isn't good.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
@@ -44,6 +50,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
+		log.Println("Error: Can't load config")
 		w.WriteHeader(http.StatusBadRequest)
 		resp := map[string]interface{}{
 			"success": false,
@@ -51,6 +58,17 @@ func upload(w http.ResponseWriter, r *http.Request) {
 		}
 		json.NewEncoder(w).Encode(resp)
 		return
+	}
+
+	_, err = cfg.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		log.Println("Error: No credentials set")
+		w.WriteHeader(http.StatusBadRequest)
+		resp := map[string]interface{}{
+			"success": false,
+			"message": "no credential found",
+		}
+		json.NewEncoder(w).Encode(resp)
 	}
 
 	// Create the client.
@@ -65,6 +83,7 @@ func upload(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if err != nil {
+		log.Println("Can't retrieve pre-signed object")
 		w.WriteHeader(http.StatusInternalServerError)
 		resp := map[string]interface{}{
 			"success": false,

@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/dchest/uniuri"
+	"github.com/hibiken/asynq"
 )
 
 const (
@@ -17,9 +20,69 @@ const (
 )
 
 func main() {
-	http.HandleFunc("/", GetUploadPresignedUrl)
+	http.HandleFunc("/upload", GetUploadPresignedUrl)
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", nil))
+}
+
+func enableCors(w *http.ResponseWriter) {
+	// Enable cors. This isn't good.
+	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
+}
+
+type TaskQueueHandler struct {
+	Connection *asynq.Client
+	next       func(http.ResponseWriter, *http.Request)
+}
+
+func (t *TaskQueueHandler) TaskMiddleware(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), "queue_conn", t.Connection)
+		t.next(w, r.WithContext(ctx))
+	}
+}
+
+// This API kickstarts the pipeline for saving
+func HandleVideoSave(w http.ResponseWriter, r *http.Request) {
+	// Ensure the method is correct.
+	if r.Method != "POST" {
+		log.Println("Error: Not GET request")
+		w.WriteHeader(http.StatusBadRequest)
+		resp := map[string]interface{}{
+			"success": false,
+			"message": "invalid method",
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	// Get the connection
+	qc := r.Context().Value("queue_conn")
+	if qc == nil {
+		log.Println("Error: queue connection not specified")
+		w.WriteHeader(http.StatusInternalServerError)
+		resp := map[string]interface{}{
+			"success": false,
+			"message": "queue connection not specified",
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	queueConn, ok := qc.(*asynq.Client)
+	if !ok {
+		log.Println("Error: queue connection invalid type")
+		w.WriteHeader(http.StatusBadRequest)
+		resp := map[string]interface{}{
+			"success": false,
+			"message": "queue connection invalid type",
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	_ = queueConn
+
 }
 
 func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
@@ -34,9 +97,8 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enable cors. This isn't good.
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// I really need to enable cors
+	enableCors(&w)
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
@@ -77,9 +139,15 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	// Presign the client.
 	presignClient := s3.NewPresignClient(client)
 
+	// Create the random string we'll save the file to.
+	randomKey := uniuri.NewLen(100)
+
+	expireDate := time.Now().AddDate(0, 0, 1)
+
 	response, err := presignClient.PresignPutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket: aws.String("toktik-videos"),
-		Key:    aws.String("cat.png"),
+		Bucket:  aws.String("toktik-videos"),
+		Key:     aws.String(randomKey),
+		Expires: &expireDate,
 	})
 
 	if err != nil {
@@ -97,6 +165,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{
 		"success": true,
 		"url":     response.URL,
+		"key":     randomKey,
 	}
 	json.NewEncoder(w).Encode(resp)
 }

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dchest/uniuri"
+	tasks "github.com/help-me-someone/scalable-p2-tasks"
 	"github.com/hibiken/asynq"
 )
 
@@ -20,7 +20,14 @@ const (
 )
 
 func main() {
+	// taskQueueHandler := &TaskQueueHandler{
+	// 	Connection: asynq.NewClient(asynq.RedisClientOpt{
+	// 		Addr: "redis:6379",
+	// 	}),
+	// }
+
 	http.HandleFunc("/upload", GetUploadPresignedUrl)
+	// http.HandleFunc("/save", taskQueueHandler.TaskMiddleware(HandleVideoSave))
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", nil))
 }
@@ -33,13 +40,12 @@ func enableCors(w *http.ResponseWriter) {
 
 type TaskQueueHandler struct {
 	Connection *asynq.Client
-	next       func(http.ResponseWriter, *http.Request)
 }
 
 func (t *TaskQueueHandler) TaskMiddleware(next func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), "queue_conn", t.Connection)
-		t.next(w, r.WithContext(ctx))
+		next(w, r.WithContext(ctx))
 	}
 }
 
@@ -56,6 +62,11 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
+
+	log.Println("Handling save...")
+
+	// Enable cors.
+	enableCors(&w)
 
 	// Get the connection
 	qc := r.Context().Value("queue_conn")
@@ -81,8 +92,50 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = queueConn
+	user := r.Header.Get("username")
+	if len(user) == 0 {
+		log.Println("No username found in header.")
+		user = "user"
+	}
+	video_name := r.Header.Get("video-name")
+	if len(video_name) == 0 {
+		log.Println("No video-name found in header.")
+		video_name = "video-name"
+	}
 
+	// Create the task.
+	t1, err := tasks.NewVideoSaveTask(user, video_name)
+	if err != nil {
+		log.Println("Error: failed to create task:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		resp := map[string]interface{}{
+			"success": false,
+			"message": "failed to create task",
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	// Queue the task.
+	info, err := queueConn.Enqueue(t1)
+	if err != nil {
+		log.Println("Error: failed to queue task:", err)
+		w.WriteHeader(http.StatusBadRequest)
+		resp := map[string]interface{}{
+			"success": false,
+			"message": "failed to queue task",
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	resp := map[string]interface{}{
+		"success": true,
+		"message": "sucessfully enqueued task",
+		"type":    info.Type,
+	}
+	json.NewEncoder(w).Encode(resp)
+	log.Printf(" [*] Successfully enqueued task: %+v", info)
 }
 
 func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
@@ -97,8 +150,11 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("User requesting presigned:", r.Header.Get("username"))
+
 	// I really need to enable cors
-	enableCors(&w)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
@@ -142,12 +198,9 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	// Create the random string we'll save the file to.
 	randomKey := uniuri.NewLen(100)
 
-	expireDate := time.Now().AddDate(0, 0, 1)
-
 	response, err := presignClient.PresignPutObject(context.TODO(), &s3.PutObjectInput{
-		Bucket:  aws.String("toktik-videos"),
-		Key:     aws.String(randomKey),
-		Expires: &expireDate,
+		Bucket: aws.String("toktik-videos"),
+		Key:    aws.String(randomKey),
 	})
 
 	if err != nil {
@@ -165,7 +218,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{
 		"success": true,
 		"url":     response.URL,
-		"key":     randomKey,
+		"key":     "cat.jpg",
 	}
 	json.NewEncoder(w).Encode(resp)
 }

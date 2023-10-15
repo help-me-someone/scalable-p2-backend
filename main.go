@@ -157,7 +157,13 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("User requesting presigned:", r.Header.Get("username"))
+	username := r.Header.Get("X-Username")
+	log.Println("User requesting presigned:", username)
+
+	if len(username) == 0 {
+		log.Println("Username not specified")
+		return
+	}
 
 	// I really need to enable cors
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -206,9 +212,12 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	// Create the random string we'll save the file to.
 	randomKey := uniuri.NewLen(100)
 
+	// We save it as "vid". The directory for the video is randomly generated.
+	keyPath := fmt.Sprintf("users/%s/videos/%s/vid", username, randomKey)
+
 	response, err := presignClient.PresignPutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket: aws.String("toktik-videos"),
-		Key:    aws.String(randomKey),
+		Key:    aws.String(keyPath),
 	})
 
 	if err != nil {

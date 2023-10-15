@@ -194,6 +194,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 			"message": "no credential found",
 		}
 		json.NewEncoder(w).Encode(resp)
+		return
 	}
 
 	// Create the client.

@@ -31,6 +31,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.2.0 // indirect
 	github.com/help-me-someone/scalable-p2-tasks v0.0.0-20231014080108-ad60cceeb8bc // indirect
+	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/redis/go-redis/v9 v9.0.3 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.3.1 // indirect

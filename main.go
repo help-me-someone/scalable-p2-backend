@@ -20,14 +20,14 @@ const (
 )
 
 func main() {
-	// taskQueueHandler := &TaskQueueHandler{
-	// 	Connection: asynq.NewClient(asynq.RedisClientOpt{
-	// 		Addr: "redis:6379",
-	// 	}),
-	// }
+	taskQueueHandler := &TaskQueueHandler{
+		Connection: asynq.NewClient(asynq.RedisClientOpt{
+			Addr: "redis:6379",
+		}),
+	}
 
 	http.HandleFunc("/upload", GetUploadPresignedUrl)
-	// http.HandleFunc("/save", taskQueueHandler.TaskMiddleware(HandleVideoSave))
+	http.HandleFunc("/save", taskQueueHandler.TaskMiddleware(HandleVideoSave))
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", nil))
 }
@@ -64,6 +64,7 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Println("Handling save...")
+	log.Println("X-Username:", r.Header.Get("X-Username"))
 
 	// Enable cors.
 	enableCors(&w)
@@ -92,14 +93,18 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := r.Header.Get("username")
+	// The Forwardauth should send this.
+	// NOTE: See IsAuth in auth svc.
+	user := r.Header.Get("X-Username")
 	if len(user) == 0 {
-		log.Println("No username found in header.")
+		log.Println("No X-Username found in header.")
 		user = "user"
 	}
-	video_name := r.Header.Get("video-name")
+
+	// Should be set by the request.
+	video_name := r.Header.Get("X-Video-Name")
 	if len(video_name) == 0 {
-		log.Println("No video-name found in header.")
+		log.Println("No X-Video-Name found in header.")
 		video_name = "video-name"
 	}
 
@@ -133,6 +138,8 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "sucessfully enqueued task",
 		"type":    info.Type,
+		"user":    user,
+		"video":   video_name, // This is the video address in the bucket.
 	}
 	json.NewEncoder(w).Encode(resp)
 	log.Printf(" [*] Successfully enqueued task: %+v", info)
@@ -218,7 +225,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{
 		"success": true,
 		"url":     response.URL,
-		"key":     "cat.jpg",
+		"key":     randomKey,
 	}
 	json.NewEncoder(w).Encode(resp)
 }

@@ -36,7 +36,8 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	log.Println("X-Username:", r.Header.Get("X-Username"))
 
 	// Enable cors.
-	enableCors(&w)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	// Get the connection
 	qc := r.Context().Value("queue_conn")
@@ -218,7 +219,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 func getVideoKey(username, videoname string) string {
 	_ = username
 	_ = videoname
-	return "hYa2JKKyz9bUDcs9OrXwP0GMFcS6ZnR5nu3VXyO7IZeVcUPXTt67mLsRssdxuf2GIoIqTB9LlVWjsL4IJ8FbSAvsoBttt5Ncfm5N"
+	return "a8l0ohuRfbkIGY3rrv2vnE4L9yPolOxBC08r8PwYE8e5IyD6c6WUXLs59TX7aHWIXavh91ztlfRof3AbxWaZVR1P44UrHV7ucFvl"
 }
 
 //

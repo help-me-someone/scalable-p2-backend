@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -113,6 +113,7 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	json.NewEncoder(w).Encode(resp)
 	log.Printf(" [*] Successfully enqueued task: %+v", info)
 }
+
 func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if r.Method != "GET" {
 		log.Println("Error: Not GET request")
@@ -140,7 +141,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 	}
 
 	// I really need to enable cors
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
@@ -214,10 +215,16 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 	json.NewEncoder(w).Encode(resp)
 }
 
+func getVideoKey(username, videoname string) string {
+	_ = username
+	_ = videoname
+	return "hYa2JKKyz9bUDcs9OrXwP0GMFcS6ZnR5nu3VXyO7IZeVcUPXTt67mLsRssdxuf2GIoIqTB9LlVWjsL4IJ8FbSAvsoBttt5Ncfm5N"
+}
+
 //
 // This function deals with retrieving data from digital ocean spaces.
 //
-func S3Handler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	username := r.Header.Get("X-Username")
 	log.Println("User requesting video:", username)
 
@@ -231,9 +238,6 @@ func S3Handler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
@@ -274,39 +278,25 @@ func S3Handler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	user := p.ByName("user")
 	resource := p.ByName("video")
-	keyPath := fmt.Sprintf("users/%s/videos%s", user, resource)
+	keyPath := fmt.Sprintf("users/%s/videos/%s", user, getVideoKey(user, resource))
+
 	log.Printf("Requesting for %s", keyPath)
 
-	rawObject, err := client.GetObject(context.TODO(), &s3.GetObjectInput{
-		Bucket: aws.String("toktik-videos"),
-		Key:    aws.String(keyPath),
-	})
+	// Generate the HSL file.
+	buf, err := GenerateHSLFile(keyPath, client)
 	if err != nil {
-		log.Println("Error: No credentials set")
 		w.WriteHeader(http.StatusBadRequest)
 		resp := map[string]interface{}{
 			"success": false,
-			"message": err.Error(),
+			"message": "failed to generate HLS file",
 		}
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
 
-	// Convert S3 output body to a buffer
-	buf, err := ioutil.ReadAll(rawObject.Body)
-	if err != nil {
-		log.Println("Error: failed to read object")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "failed to read object",
-		}
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
+	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
-	// Get read seeker from buffer
-	reader := bytes.NewReader(buf)
-
-	http.ServeContent(w, r, "", *rawObject.LastModified, reader)
+	http.ServeContent(w, r, "", time.Now(), bytes.NewReader((buf.Bytes())))
 }

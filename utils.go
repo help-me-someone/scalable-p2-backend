@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -68,4 +69,28 @@ func GenerateHSLFile(root string, client *s3.Client) (bytes.Buffer, error) {
 	}
 
 	return buf, nil
+}
+
+func GetS3Client(region string) (*s3.Client, error) {
+	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		return aws.Endpoint{
+			URL: "https://" + region + ".digitaloceanspaces.com",
+		}, nil
+	})
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+		config.WithEndpointResolverWithOptions(customResolver),
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cfg.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+
+	return s3.NewFromConfig(cfg), nil
 }

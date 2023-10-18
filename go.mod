@@ -30,7 +30,10 @@ require (
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.2.0 // indirect
+	github.com/help-me-someone/scalable-p2-db v0.0.0-20231018033356-c3cabeb5fda7 // indirect
 	github.com/help-me-someone/scalable-p2-tasks v0.0.0-20231014080108-ad60cceeb8bc // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/redis/go-redis/v9 v9.0.3 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
@@ -38,4 +41,5 @@ require (
 	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	google.golang.org/protobuf v1.26.0 // indirect
+	gorm.io/gorm v1.25.5 // indirect
 )

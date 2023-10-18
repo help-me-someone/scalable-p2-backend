@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dchest/uniuri"
+	"github.com/help-me-someone/scalable-p2-db/models/video"
 	tasks "github.com/help-me-someone/scalable-p2-tasks"
 	"github.com/hibiken/asynq"
 	"github.com/julienschmidt/httprouter"
@@ -243,19 +244,6 @@ func getVideoKey(username, videoname string) string {
 // This function deals with retrieving data from digital ocean spaces.
 //
 func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-	username := r.Header.Get("X-Username")
-	log.Println("User requesting video:", username)
-
-	if len(username) == 0 {
-		log.Println("Can't find username in X-Username")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "Error: missing username header.",
-		}
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
 
 	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
 		return aws.Endpoint{
@@ -317,4 +305,59 @@ func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader((buf.Bytes())))
+}
+
+// Given a request, we return enough information for the frontend to be able to
+// display it.
+// NOTE: This does not return the HLS!
+func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	// We only have the video name.
+	videoName := p.ByName("video")
+	username := p.ByName("user")
+	if len(videoName) == 0 || len(username) == 0 {
+		FailResponse(w, http.StatusBadRequest, "Video name/username not specified.")
+		return
+	}
+
+	// Search for the entry.
+	url := fmt.Sprintf("http://db-svc:8083/user/%s/videos/%s", username, videoName)
+	resp, err := http.Get(url)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Println(err)
+		FailResponse(w, http.StatusInternalServerError, "Create user request failed.")
+		return
+	}
+	defer resp.Body.Close()
+
+	vid := &video.Video{}
+	if err := json.NewDecoder(resp.Body).Decode(vid); err != nil {
+		log.Println("Could not decode video.")
+		FailResponse(w, http.StatusInternalServerError, "Could not decode video.")
+		return
+	}
+
+	// Create the presigned url for the thumbnail.
+	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoName)
+	client, err := GetS3Client(region)
+	if err != nil {
+		log.Println("Could not create s3 client.")
+		FailResponse(w, http.StatusInternalServerError, "Could not create s3 client.")
+		return
+	}
+
+	log.Println("Thumbnail key:", thumbnailKey)
+
+	url, err = GeneratePresignedUrl(thumbnailKey, client)
+	if err != nil {
+		log.Println("Failed to generate presigned url.")
+		FailResponse(w, http.StatusInternalServerError, "Failed to generate presigned url.")
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"message":   "Video found.",
+		"video":     vid,
+		"thumbnail": url,
+	})
 }

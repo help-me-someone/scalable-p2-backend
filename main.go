@@ -23,7 +23,10 @@ func main() {
 	mux := httprouter.New()
 	mux.GET("/upload", GetUploadPresignedUrl)
 	mux.POST("/save", taskQueueHandler.TaskMiddleware(HandleVideoSave))
-	mux.GET("/users/:user/videos/*video", VideoHandler)
+	mux.GET("/users/:user/videos/:video", VideoHandler)
+
+	// Retrieve enough information for the frontend to be able to render.
+	mux.GET("/users/:user/videos/:video/info", HandleVideoInfo)
 
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", mux))

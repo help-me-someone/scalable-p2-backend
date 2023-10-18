@@ -18,17 +18,20 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+func FailResponse(w http.ResponseWriter, status int, message string) {
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": false,
+		"message": message,
+	})
+}
+
 // This API kickstarts the pipeline for saving
 func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	// Ensure the method is correct.
 	if r.Method != "POST" {
 		log.Println("Error: Not GET request")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "invalid method",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusBadRequest, "Invalid method.")
 		return
 	}
 
@@ -43,23 +46,13 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	qc := r.Context().Value("queue_conn")
 	if qc == nil {
 		log.Println("Error: queue connection not specified")
-		w.WriteHeader(http.StatusInternalServerError)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "queue connection not specified",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusInternalServerError, "Queue connection not specified.")
 		return
 	}
 	queueConn, ok := qc.(*asynq.Client)
 	if !ok {
 		log.Println("Error: queue connection invalid type")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "queue connection invalid type",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusBadRequest, "Queue connection invalid type.")
 		return
 	}
 
@@ -82,14 +75,38 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	t1, err := tasks.NewVideoSaveTask(user, video_name)
 	if err != nil {
 		log.Println("Error: failed to create task:", err)
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "failed to create task",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusBadRequest, "Failed to create task.")
 		return
 	}
+	// TODO: ^^^ Clean this up, stop using headers...
+
+	payload := struct {
+		FileName string `json:"file_name"`
+	}{}
+	err = json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		FailResponse(w, http.StatusBadRequest, "Failed to retrieve file name.")
+		return
+	}
+
+	// Create the new entry.
+	var buf bytes.Buffer
+	json.NewEncoder(&buf).Encode(map[string]interface{}{
+		"name":       payload.FileName,
+		"key":        video_name, // TODO: Fix misleading name.
+		"owner_name": user,
+	})
+
+	// Create a new entry on the database.
+	resp, err := http.Post("http://db-svc:8083/video", "application/json", &buf)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		log.Println(err)
+		FailResponse(w, http.StatusInternalServerError, "Create user request failed.")
+		return
+	}
+	defer resp.Body.Close()
+
+	log.Println("Added the video to the database!")
 
 	// Queue the task.
 	info, err := queueConn.Enqueue(t1)
@@ -104,14 +121,14 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		return
 	}
 
-	resp := map[string]interface{}{
+	re := map[string]interface{}{
 		"success": true,
 		"message": "sucessfully enqueued task",
 		"type":    info.Type,
 		"user":    user,
 		"video":   video_name, // This is the video address in the bucket.
 	}
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(re)
 	log.Printf(" [*] Successfully enqueued task: %+v", info)
 }
 
@@ -289,7 +306,7 @@ func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		w.WriteHeader(http.StatusBadRequest)
 		resp := map[string]interface{}{
 			"success": false,
-			"message": "failed to generate HLS file",
+			"message": fmt.Sprintf("failed to generate HLS file: %s", err),
 		}
 		json.NewEncoder(w).Encode(resp)
 		return

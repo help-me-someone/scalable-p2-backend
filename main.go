@@ -29,8 +29,8 @@ func main() {
 	log.Fatal(http.ListenAndServe(":7000", mux))
 }
 
+// TODO: Clean this up maybe.
 func enableCors(w *http.ResponseWriter) {
-	// Enable cors. This isn't good.
 	(*w).Header().Set("Access-Control-Allow-Origin", "*")
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }

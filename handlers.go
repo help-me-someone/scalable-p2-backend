@@ -397,3 +397,71 @@ func VideoFeedHandler(w http.ResponseWriter, r *http.Request, p httprouter.Param
 		"entries": entries,
 	})
 }
+
+func GetVideoByRank(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	log.Println("Getting video by rank.")
+
+	// Attempt to get the query values.
+	rankStr := p.ByName("rank")
+	if len(rankStr) == 0 {
+		FailResponse(w, http.StatusBadRequest, "Failed to get videos.")
+		return
+	}
+
+	// Query the database.
+	url := fmt.Sprintf("http://db-svc:8083/rank/video/%s", rankStr)
+	resp, err := http.Get(url)
+	if err != nil {
+		FailResponse(w, http.StatusInternalServerError, "Failed to request feed.")
+	} else if resp.StatusCode != http.StatusOK {
+		FailResponse(w, http.StatusBadRequest, "Failed to request feed.")
+	}
+	defer resp.Body.Close()
+
+	// Decode the entries and get the key of each video.
+	response := &struct {
+		Success bool                     `json:"success"`
+		Message string                   `json:"message"`
+		Entry   video.VideoWithUserEntry `json:"video"`
+	}{}
+
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Println("Failed to decode:", err)
+		FailResponse(w, http.StatusInternalServerError, "Failed to decode videos response.")
+		return
+	}
+
+	// Create a new S3 client.
+	client, err := GetS3Client(region)
+	if err != nil {
+		FailResponse(w, http.StatusInternalServerError, "Failed to get an S3 client.")
+		log.Panicln("Failed to generate S3 client.")
+		return
+	}
+
+	// Generate the response for the frontend.
+	// For each video, we just generate the video thumbnail.
+	thumbnailUrl, err := GenerateVideoThumbnailUrl(client, response.Entry.Username, response.Entry.Key)
+	if err != nil {
+		log.Println("Failed to generate thumbnail.")
+		return
+	}
+
+	type Entry struct {
+		Video        video.VideoWithUserEntry `json:"video"`
+		ThumbnailURL string                   `json:"thumbnail_url"`
+	}
+	entry := &Entry{
+		Video:        response.Entry,
+		ThumbnailURL: thumbnailUrl,
+	}
+
+	// Send the response.
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Successfully retrieved feed.",
+		"entry":   entry,
+	})
+}

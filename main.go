@@ -28,6 +28,7 @@ func main() {
 	// Retrieve enough information for the frontend to be able to render.
 	mux.GET("/users/:user/videos/:video/info", HandleVideoInfo)
 	mux.GET("/video/feed/:amount/:page", VideoFeedHandler)
+	mux.GET("/video/rank/:rank", GetVideoByRank)
 
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", mux))

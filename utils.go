@@ -94,3 +94,8 @@ func GetS3Client(region string) (*s3.Client, error) {
 
 	return s3.NewFromConfig(cfg), nil
 }
+
+func GenerateVideoThumbnailUrl(client *s3.Client, username, videoKey string) (string, error) {
+	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoKey)
+	return GeneratePresignedUrl(thumbnailKey, client)
+}

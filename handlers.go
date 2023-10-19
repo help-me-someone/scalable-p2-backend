@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dchest/uniuri"
+
 	"github.com/help-me-someone/scalable-p2-db/models/video"
 	tasks "github.com/help-me-someone/scalable-p2-tasks"
 	"github.com/hibiken/asynq"
@@ -359,5 +360,75 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 		"message":   "Video found.",
 		"video":     vid,
 		"thumbnail": url,
+	})
+}
+
+// The VideoFeedHandler handles when the frontend requests for content on the home page.
+// The content is going to be used for the infinite scrolling on the frontend side.
+// This will simply return a bunch of videos. With their thumbnail's url.
+func VideoFeedHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	// Attempt to get the query values.
+	amountStr := p.ByName("amount")
+	pageStr := p.ByName("page")
+	if len(amountStr) == 0 || len(pageStr) == 0 {
+		FailResponse(w, http.StatusBadRequest, "Failed to get videos.")
+		return
+	}
+
+	// Query the database.
+	url := fmt.Sprintf("http://db-svc:8083/popular/%s/%s", amountStr, pageStr)
+	resp, err := http.Get(url)
+	if err != nil {
+		FailResponse(w, http.StatusInternalServerError, "Failed to request feed.")
+	} else if resp.StatusCode != http.StatusOK {
+		FailResponse(w, http.StatusBadRequest, "Failed to request feed.")
+	}
+	defer resp.Body.Close()
+
+	// Decode the entries and get the key of each video.
+	response := &struct {
+		Success bool                       `json:"success"`
+		Message string                     `json:"message"`
+		Entries []video.VideoWithUserEntry `json:"videos"`
+	}{}
+
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		log.Println("Failed to decode:", err)
+		FailResponse(w, http.StatusInternalServerError, "Failed to decode videos response.")
+		return
+	}
+
+	// Create a new S3 client.
+	client, err := GetS3Client(region)
+	if err != nil {
+		FailResponse(w, http.StatusInternalServerError, "Failed to get an S3 client.")
+	}
+
+	// Generate the response for the frontend.
+	// For each video, we just generate the video thumbnail.
+	type Entry struct {
+		Video        video.VideoWithUserEntry
+		ThumbnailURL string
+	}
+	entries := make([]Entry, 0)
+	for _, v := range response.Entries {
+		thumbnailUrl, err := GenerateVideoThumbnailUrl(client, v.Username, v.Key)
+		if err != nil {
+			log.Println("Something went wrong.")
+			continue
+		}
+		entries = append(entries, Entry{
+			Video:        v,
+			ThumbnailURL: thumbnailUrl,
+		})
+	}
+
+	// Send the response.
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Successfully retrieved feed.",
+		"entries": entries,
 	})
 }

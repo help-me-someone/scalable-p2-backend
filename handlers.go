@@ -409,8 +409,8 @@ func VideoFeedHandler(w http.ResponseWriter, r *http.Request, p httprouter.Param
 	// Generate the response for the frontend.
 	// For each video, we just generate the video thumbnail.
 	type Entry struct {
-		Video        video.VideoWithUserEntry
-		ThumbnailURL string
+		Video        video.VideoWithUserEntry `json:"video"`
+		ThumbnailURL string                   `json:"thumbnail_url"`
 	}
 	entries := make([]Entry, 0)
 	for _, v := range response.Entries {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -283,14 +284,11 @@ func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	// Create the client.
 	client := s3.NewFromConfig(cfg)
 
-	user := p.ByName("user")
+	user := strings.ToLower(p.ByName("user"))
 	resource := p.ByName("video")
-	keyPath := fmt.Sprintf("users/%s/videos/%s", user, getVideoKey(user, resource))
-
-	log.Printf("Requesting for %s", keyPath)
 
 	// Generate the HSL file.
-	buf, err := GenerateHSLFile(keyPath, client)
+	buf, err := GenerateHSLFile(client, user, resource)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		resp := map[string]interface{}{

@@ -25,10 +25,41 @@ func GeneratePresignedUrl(key string, client *s3.Client) (string, error) {
 	return url.URL, nil
 }
 
+func GetS3Client(region string) (*s3.Client, error) {
+	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
+		return aws.Endpoint{
+			URL: "https://" + region + ".digitaloceanspaces.com",
+		}, nil
+	})
+
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+		config.WithEndpointResolverWithOptions(customResolver),
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = cfg.Credentials.Retrieve(context.TODO())
+	if err != nil {
+		return nil, err
+	}
+
+	return s3.NewFromConfig(cfg), nil
+}
+
+func GenerateVideoThumbnailUrl(client *s3.Client, username, videoKey string) (string, error) {
+	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoKey)
+	return GeneratePresignedUrl(thumbnailKey, client)
+}
+
 // Creates a HLS file with presigned urls.
 // Input:
-// - root: The root file (the .m3u8)
-func GenerateHSLFile(root string, client *s3.Client) (bytes.Buffer, error) {
+// - username
+// - videoKey
+func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer, error) {
+	root := fmt.Sprintf("users/%s/videos/%s", username, videoKey)
 
 	// Get the HLS root file.
 	key := aws.String(fmt.Sprintf("%s/vid.m3u8", root))
@@ -69,33 +100,4 @@ func GenerateHSLFile(root string, client *s3.Client) (bytes.Buffer, error) {
 	}
 
 	return buf, nil
-}
-
-func GetS3Client(region string) (*s3.Client, error) {
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			URL: "https://" + region + ".digitaloceanspaces.com",
-		}, nil
-	})
-
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-		config.WithEndpointResolverWithOptions(customResolver),
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = cfg.Credentials.Retrieve(context.TODO())
-	if err != nil {
-		return nil, err
-	}
-
-	return s3.NewFromConfig(cfg), nil
-}
-
-func GenerateVideoThumbnailUrl(client *s3.Client, username, videoKey string) (string, error) {
-	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoKey)
-	return GeneratePresignedUrl(thumbnailKey, client)
 }

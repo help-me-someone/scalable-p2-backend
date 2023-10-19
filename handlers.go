@@ -38,9 +38,6 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		return
 	}
 
-	log.Println("Handling save...")
-	log.Println("X-Username:", r.Header.Get("X-Username"))
-
 	// Enable cors.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -297,8 +294,12 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 	}
 	defer resp.Body.Close()
 
-	vid := &video.Video{}
-	if err := json.NewDecoder(resp.Body).Decode(vid); err != nil {
+	type ResponsePayload struct {
+		Video video.Video
+	}
+	payload := &ResponsePayload{}
+
+	if err := json.NewDecoder(resp.Body).Decode(payload); err != nil {
 		log.Println("Could not decode video.")
 		FailResponse(w, http.StatusInternalServerError, "Could not decode video.")
 		return
@@ -313,8 +314,6 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 		return
 	}
 
-	log.Println("Thumbnail key:", thumbnailKey)
-
 	url, err = GeneratePresignedUrl(thumbnailKey, client)
 	if err != nil {
 		log.Println("Failed to generate presigned url.")
@@ -323,10 +322,9 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":   true,
-		"message":   "Video found.",
-		"video":     vid,
-		"thumbnail": url,
+		"success": true,
+		"message": "Video found.",
+		"video":   payload.Video,
 	})
 }
 

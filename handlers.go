@@ -247,42 +247,11 @@ func getVideoKey(username, videoname string) string {
 //
 func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			URL: "https://" + region + ".digitaloceanspaces.com",
-		}, nil
-	})
-
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-		config.WithEndpointResolverWithOptions(customResolver),
-	)
-
+	client, err := GetS3Client(region)
 	if err != nil {
-		log.Println("Error: Can't load config")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "failed to load aws config",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusInternalServerError, "Failed to get S3 client.")
 		return
 	}
-
-	_, err = cfg.Credentials.Retrieve(context.TODO())
-	if err != nil {
-		log.Println("Error: No credentials set")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "no credential found",
-		}
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// Create the client.
-	client := s3.NewFromConfig(cfg)
 
 	user := strings.ToLower(p.ByName("user"))
 	resource := p.ByName("video")

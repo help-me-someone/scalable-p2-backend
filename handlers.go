@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dchest/uniuri"
 
+	"github.com/help-me-someone/scalable-p2-db/functions/crud"
 	"github.com/help-me-someone/scalable-p2-db/models/video"
 	tasks "github.com/help-me-someone/scalable-p2-tasks"
 	"github.com/hibiken/asynq"
@@ -285,25 +287,8 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 	}
 
 	// Search for the entry.
-	url := fmt.Sprintf("http://db-svc:8083/user/%s/videos/%s", username, videoName)
-	resp, err := http.Get(url)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Println(err)
-		FailResponse(w, http.StatusInternalServerError, "Create user request failed.")
-		return
-	}
-	defer resp.Body.Close()
-
-	type ResponsePayload struct {
-		Video video.Video
-	}
-	payload := &ResponsePayload{}
-
-	if err := json.NewDecoder(resp.Body).Decode(payload); err != nil {
-		log.Println("Could not decode video.")
-		FailResponse(w, http.StatusInternalServerError, "Could not decode video.")
-		return
-	}
+	connection, _ := GetDatabaseConnection("user", "password", "mysql:3306")
+	vid, _ := crud.GetUserVideoFromUsername(connection, username, videoName)
 
 	// Create the presigned url for the thumbnail.
 	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoName)
@@ -314,17 +299,21 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 		return
 	}
 
-	url, err = GeneratePresignedUrl(thumbnailKey, client)
+	url, err := GeneratePresignedUrl(thumbnailKey, client)
 	if err != nil {
 		log.Println("Failed to generate presigned url.")
 		FailResponse(w, http.StatusInternalServerError, "Failed to generate presigned url.")
 		return
 	}
 
+	// TODO: Remove me
+	log.Println("Thumbnail:", url)
+
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success": true,
-		"message": "Video found.",
-		"video":   payload.Video,
+		"success":   true,
+		"message":   "Video found.",
+		"video":     vid,
+		"thumbnail": url,
 	})
 }
 
@@ -341,27 +330,29 @@ func VideoFeedHandler(w http.ResponseWriter, r *http.Request, p httprouter.Param
 		return
 	}
 
-	// Query the database.
-	url := fmt.Sprintf("http://db-svc:8083/popular/%s/%s", amountStr, pageStr)
-	resp, err := http.Get(url)
+	// Convert query into numerical values.
+	amount, err := strconv.Atoi(amountStr)
+	page, err := strconv.Atoi(pageStr)
 	if err != nil {
-		FailResponse(w, http.StatusInternalServerError, "Failed to request feed.")
-	} else if resp.StatusCode != http.StatusOK {
-		FailResponse(w, http.StatusBadRequest, "Failed to request feed.")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to get videos.",
+		})
+		return
 	}
-	defer resp.Body.Close()
 
-	// Decode the entries and get the key of each video.
-	response := &struct {
-		Success bool                       `json:"success"`
-		Message string                     `json:"message"`
-		Entries []video.VideoWithUserEntry `json:"videos"`
-	}{}
+	// Create a new connection
 
-	err = json.NewDecoder(resp.Body).Decode(&response)
+	connection, _ := GetDatabaseConnection("user", "password", "mysql:3306")
+	vids, err := crud.GetTopPopularVideos(connection, page, amount)
+
 	if err != nil {
-		log.Println("Failed to decode:", err)
-		FailResponse(w, http.StatusInternalServerError, "Failed to decode videos response.")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to get videos.",
+		})
 		return
 	}
 
@@ -378,7 +369,7 @@ func VideoFeedHandler(w http.ResponseWriter, r *http.Request, p httprouter.Param
 		ThumbnailURL string                   `json:"thumbnail_url"`
 	}
 	entries := make([]Entry, 0)
-	for _, v := range response.Entries {
+	for _, v := range vids {
 		thumbnailUrl, err := GenerateVideoThumbnailUrl(client, v.Username, v.Key)
 		if err != nil {
 			log.Println("Something went wrong.")
@@ -409,27 +400,18 @@ func GetVideoByRank(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 		return
 	}
 
+	// Get connection.
+	connection, _ := GetDatabaseConnection("user", "password", "mysql:3306")
+
 	// Query the database.
-	url := fmt.Sprintf("http://db-svc:8083/rank/video/%s", rankStr)
-	resp, err := http.Get(url)
+	rank, _ := strconv.Atoi(rankStr)
+	vid, err := crud.GetVideoByRank(connection, rank)
 	if err != nil {
-		FailResponse(w, http.StatusInternalServerError, "Failed to request feed.")
-	} else if resp.StatusCode != http.StatusOK {
-		FailResponse(w, http.StatusBadRequest, "Failed to request feed.")
-	}
-	defer resp.Body.Close()
-
-	// Decode the entries and get the key of each video.
-	response := &struct {
-		Success bool                     `json:"success"`
-		Message string                   `json:"message"`
-		Entry   video.VideoWithUserEntry `json:"video"`
-	}{}
-
-	err = json.NewDecoder(resp.Body).Decode(&response)
-	if err != nil {
-		log.Println("Failed to decode:", err)
-		FailResponse(w, http.StatusInternalServerError, "Failed to decode videos response.")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Video not found.",
+		})
 		return
 	}
 
@@ -443,7 +425,7 @@ func GetVideoByRank(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 
 	// Generate the response for the frontend.
 	// For each video, we just generate the video thumbnail.
-	thumbnailUrl, err := GenerateVideoThumbnailUrl(client, response.Entry.Username, response.Entry.Key)
+	thumbnailUrl, err := GenerateVideoThumbnailUrl(client, vid.Username, vid.Key)
 	if err != nil {
 		log.Println("Failed to generate thumbnail.")
 		return
@@ -454,7 +436,7 @@ func GetVideoByRank(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 		ThumbnailURL string                   `json:"thumbnail_url"`
 	}
 	entry := &Entry{
-		Video:        response.Entry,
+		Video:        *vid,
 		ThumbnailURL: thumbnailUrl,
 	}
 

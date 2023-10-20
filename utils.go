@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 func GeneratePresignedUrl(key string, client *s3.Client) (string, error) {
@@ -100,4 +102,10 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 	}
 
 	return buf, nil
+}
+
+// Create and return a new database connection.
+func GetDatabaseConnection(username, password, server string) (*gorm.DB, error) {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/toktik-db?charset=utf8mb4&parseTime=True&loc=Local", username, password, server)
+	return gorm.Open(mysql.Open(dsn), &gorm.Config{})
 }

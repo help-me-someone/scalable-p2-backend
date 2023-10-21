@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -14,6 +16,14 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
+
+// Timer function from https://stackoverflow.com/questions/45766572/is-there-an-efficient-way-to-calculate-execution-time-in-golang
+func timer(name string) func() {
+	start := time.Now()
+	return func() {
+		fmt.Printf("%s took %v\n", name, time.Since(start))
+	}
+}
 
 func GeneratePresignedUrl(key string, client *s3.Client) (string, error) {
 	presignClient := s3.NewPresignClient(client)
@@ -74,26 +84,36 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 		return bytes.Buffer{}, err
 	}
 
-	// Scan the content of the HLS file, line by line.
 	scanner := bufio.NewScanner(object.Body)
+	urlMappings := make(map[int]string)
 
-	// Create a new buffer which will hold the generated file we'll send over.
-	var buf bytes.Buffer
-
+	// Create a wait group
+	var wg sync.WaitGroup
+	count := 0
 	for scanner.Scan() {
 		scanned := scanner.Text()
-		if strings.HasPrefix(scanned, "vid") {
-			fileKey := fmt.Sprintf("%s/%s", root, scanned)
-			url, err := GeneratePresignedUrl(fileKey, client)
-			if err != nil {
-				log.Println("Error", err)
-				return bytes.Buffer{}, err
+		wg.Add(1)
+		go func(scanned string, line int) {
+			defer wg.Done()
+			if strings.HasPrefix(scanned, "vid") {
+				fileKey := fmt.Sprintf("%s/%s", root, scanned)
+				url, _ := GeneratePresignedUrl(fileKey, client)
+				urlMappings[line] = fmt.Sprintf("%s\n", url)
+			} else {
+				urlMappings[line] = fmt.Sprintf("%s\n", scanned)
 			}
-			buf.WriteString(url)
-		} else {
-			buf.WriteString(scanned)
-		}
-		buf.WriteString("\n")
+		}(scanned, count)
+		count += 1
+	}
+	wg.Wait()
+
+	log.Println("Waiting...")
+
+	var answerBuf bytes.Buffer
+
+	for v := 0; v < count; v++ {
+		line, _ := urlMappings[v]
+		answerBuf.WriteString(line)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -101,7 +121,7 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 		return bytes.Buffer{}, err
 	}
 
-	return buf, nil
+	return answerBuf, nil
 }
 
 // Create and return a new database connection.

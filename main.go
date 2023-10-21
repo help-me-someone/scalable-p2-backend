@@ -10,7 +10,10 @@ import (
 )
 
 const (
-	region = "sgp1"
+	region      = "sgp1"
+	DB_USERNAME = "user"
+	DB_PASSWORD = "password"
+	DB_IP       = "mysql:3306"
 )
 
 func main() {
@@ -31,6 +34,7 @@ func main() {
 	mux.GET("/users/:user/videos/:video/info", HandleVideoInfo)
 	mux.GET("/video/feed/:amount/:page", VideoFeedHandler)
 	mux.GET("/video/rank/:rank", GetVideoByRank)
+	mux.GET("/users/:user/videos", GetUserVideos)
 
 	log.Println("Server started successfully, listening on port 7000.")
 	log.Fatal(http.ListenAndServe(":7000", mux))

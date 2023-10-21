@@ -235,12 +235,6 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 	json.NewEncoder(w).Encode(resp)
 }
 
-func getVideoKey(username, videoname string) string {
-	_ = username
-	_ = videoname
-	return "a8l0ohuRfbkIGY3rrv2vnE4L9yPolOxBC08r8PwYE8e5IyD6c6WUXLs59TX7aHWIXavh91ztlfRof3AbxWaZVR1P44UrHV7ucFvl"
-}
-
 //
 // This function deals with retrieving data from digital ocean spaces.
 //
@@ -287,7 +281,7 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 	}
 
 	// Search for the entry.
-	connection, _ := GetDatabaseConnection("user", "password", "mysql:3306")
+	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
 	vid, _ := crud.GetUserVideoFromUsername(connection, username, videoName)
 
 	// Create the presigned url for the thumbnail.
@@ -344,7 +338,7 @@ func VideoFeedHandler(w http.ResponseWriter, r *http.Request, p httprouter.Param
 
 	// Create a new connection
 
-	connection, _ := GetDatabaseConnection("user", "password", "mysql:3306")
+	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
 	vids, err := crud.GetTopPopularVideos(connection, page, amount)
 
 	if err != nil {
@@ -401,7 +395,7 @@ func GetVideoByRank(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 	}
 
 	// Get connection.
-	connection, _ := GetDatabaseConnection("user", "password", "mysql:3306")
+	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
 
 	// Query the database.
 	rank, _ := strconv.Atoi(rankStr)
@@ -446,4 +440,46 @@ func GetVideoByRank(w http.ResponseWriter, r *http.Request, p httprouter.Params)
 		"message": "Successfully retrieved feed.",
 		"entry":   entry,
 	})
+}
+
+func GetUserVideos(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	// Make a new database client
+	connection, err := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to get the database connection.",
+		})
+		return
+	}
+
+	// Retrieve the username
+	username := p.ByName("user")
+	if len(username) == 0 {
+		log.Println("Where the username be at??")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "No username specified",
+		})
+		return
+	}
+
+	// Retrieve the user's vidoes.
+	videos, err := crud.GetUserVideosFromUsername(connection, username)
+	if err != nil {
+		log.Println("Something bad has truly happened.")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Failed to get user's videos.",
+			"videos":  videos,
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Successfully retrieved user videos.",
+		"videos":  videos,
+	})
+
 }

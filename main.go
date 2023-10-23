@@ -32,6 +32,7 @@ func main() {
 
 	// Retrieve enough information for the frontend to be able to render.
 	mux.GET("/users/:user/videos/:video/info", HandleVideoInfo)
+	mux.GET("/watch/:user/:video/info", HandleVideoWatchInfo)
 	mux.GET("/video/feed/:amount/:page", VideoFeedHandler)
 	mux.GET("/video/rank/:rank", GetVideoByRank)
 	mux.GET("/users/:user/videos", GetUserVideos)

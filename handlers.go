@@ -300,8 +300,53 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 		return
 	}
 
-	// TODO: Remove me
-	log.Println("Thumbnail:", url)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":   true,
+		"message":   "Video found.",
+		"video":     vid,
+		"thumbnail": url,
+	})
+}
+
+// Corresponds to the "/watch/:user/:video" URL.
+// This handler is exactly the same as the one for video info,
+// however this also increase the view count of the video.
+func HandleVideoWatchInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	// We only have the video name.
+	videoName := p.ByName("video")
+	username := p.ByName("user")
+	if len(videoName) == 0 || len(username) == 0 {
+		FailResponse(w, http.StatusBadRequest, "Video name/username not specified.")
+		return
+	}
+
+	// Search for the entry.
+	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
+	vid, _ := crud.GetUserVideoFromUsername(connection, username, videoName)
+
+	// Create the presigned url for the thumbnail.
+	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoName)
+	client, err := GetS3Client(region)
+	if err != nil {
+		log.Println("Could not create s3 client.")
+		FailResponse(w, http.StatusInternalServerError, "Could not create s3 client.")
+		return
+	}
+
+	url, err := GeneratePresignedUrl(thumbnailKey, client)
+	if err != nil {
+		log.Println("Failed to generate presigned url.")
+		FailResponse(w, http.StatusInternalServerError, "Failed to generate presigned url.")
+		return
+	}
+
+	// Increment the view count of the video.
+	err = crud.UpdateVideoViewIncrement(connection, vid.ID)
+	if err != nil {
+		log.Println("Failed to increment video view count.")
+		FailResponse(w, http.StatusBadRequest, "Failed to increment video view count")
+		return
+	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":   true,

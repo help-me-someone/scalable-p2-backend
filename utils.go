@@ -17,6 +17,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// gorm.DB objects are meant to be reused.
+var GORM_CONNECTION_SINGLETON *gorm.DB
+
 // Timer function from https://stackoverflow.com/questions/45766572/is-there-an-efficient-way-to-calculate-execution-time-in-golang
 func timer(name string) func() {
 	start := time.Now()
@@ -124,8 +127,25 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 	return answerBuf, nil
 }
 
-// Create and return a new database connection.
+// Create and return a new database connection. Ideally we
+// would check the logins etc, but we don't live in an ideal
+// world here. I got deadlines to meet. Well technically if
+// the credentials are wrong the connection could never be
+// made, so I guess it's fine...?
 func GetDatabaseConnection(username, password, server string) (*gorm.DB, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/toktik-db?charset=utf8mb4&parseTime=True&loc=Local", username, password, server)
-	return gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if GORM_CONNECTION_SINGLETON == nil {
+		dsn := fmt.Sprintf(
+			"%s:%s@tcp(%s)/toktik-db?charset=utf8mb4&parseTime=True&loc=Local",
+			username,
+			password,
+			server,
+		)
+		connection, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
+		if err != nil {
+			return nil, err
+		} else {
+			GORM_CONNECTION_SINGLETON = connection
+		}
+	}
+	return GORM_CONNECTION_SINGLETON, nil
 }

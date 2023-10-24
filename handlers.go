@@ -17,7 +17,7 @@ import (
 
 	"github.com/help-me-someone/scalable-p2-db/functions/crud"
 	"github.com/help-me-someone/scalable-p2-db/models/video"
-	tasks "github.com/help-me-someone/scalable-p2-tasks"
+	"github.com/help-me-someone/scalable-p2-worker/worker"
 	"github.com/hibiken/asynq"
 	"github.com/julienschmidt/httprouter"
 )
@@ -76,7 +76,7 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	}
 
 	// Create the task.
-	t1, err := tasks.NewVideoSaveTask(user, video_name)
+	t1, err := worker.NewVideoSaveTask(user, video_name)
 	if err != nil {
 		log.Println("Error: failed to create task:", err)
 		FailResponse(w, http.StatusBadRequest, "Failed to create task.")

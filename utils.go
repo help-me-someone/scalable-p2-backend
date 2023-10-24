@@ -74,6 +74,7 @@ func GenerateVideoThumbnailUrl(client *s3.Client, username, videoKey string) (st
 // - username
 // - videoKey
 func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer, error) {
+	defer timer("GenerateHSLFile")()
 	root := fmt.Sprintf("users/%s/videos/%s", username, videoKey)
 
 	// Get the HLS root file.
@@ -88,7 +89,7 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 	}
 
 	scanner := bufio.NewScanner(object.Body)
-	urlMappings := make(map[int]string)
+	urlMappings := sync.Map{}
 
 	// Create a wait group
 	var wg sync.WaitGroup
@@ -101,9 +102,9 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 			if strings.HasPrefix(scanned, "vid") {
 				fileKey := fmt.Sprintf("%s/%s", root, scanned)
 				url, _ := GeneratePresignedUrl(fileKey, client)
-				urlMappings[line] = fmt.Sprintf("%s\n", url)
+				urlMappings.Store(line, fmt.Sprintf("%s\n", url))
 			} else {
-				urlMappings[line] = fmt.Sprintf("%s\n", scanned)
+				urlMappings.Store(line, fmt.Sprintf("%s\n", scanned))
 			}
 		}(scanned, count)
 		count += 1
@@ -115,8 +116,8 @@ func GenerateHSLFile(client *s3.Client, username, videoKey string) (bytes.Buffer
 	var answerBuf bytes.Buffer
 
 	for v := 0; v < count; v++ {
-		line, _ := urlMappings[v]
-		answerBuf.WriteString(line)
+		line, _ := urlMappings.Load(v)
+		answerBuf.WriteString(line.(string))
 	}
 
 	if err := scanner.Err(); err != nil {

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dchest/uniuri"
 
@@ -99,14 +98,19 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		"owner_name": user,
 	})
 
-	// Create a new entry on the database.
-	resp, err := http.Post("http://db-svc:8083/video", "application/json", &buf)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		log.Println(err)
+	// Add the new video entry to the database
+	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
+	usr, _ := crud.GetUserByName(connection, user)
+	_, err = crud.CreateVideo(
+		connection,
+		payload.FileName,
+		video_name,
+		usr.ID,
+	)
+	if err != nil {
 		FailResponse(w, http.StatusInternalServerError, "Create user request failed.")
 		return
 	}
-	defer resp.Body.Close()
 
 	log.Println("Added the video to the database!")
 
@@ -114,12 +118,7 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	info, err := queueConn.Enqueue(t1)
 	if err != nil {
 		log.Println("Error: failed to queue task:", err)
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "failed to queue task",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusBadRequest, "Failed to queue task.")
 		return
 	}
 
@@ -160,46 +159,13 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	// I really need to enable cors
 	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			URL: "https://" + region + ".digitaloceanspaces.com",
-		}, nil
-	})
-
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-		config.WithEndpointResolverWithOptions(customResolver),
-	)
-
+	client, err := GetS3Client(region)
 	if err != nil {
-		log.Println("Error: Can't load config")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "user not specified",
-		}
-		json.NewEncoder(w).Encode(resp)
-		return
+		FailResponse(w, http.StatusInternalServerError, "Failed to get s3 client.")
 	}
-
-	_, err = cfg.Credentials.Retrieve(context.TODO())
-	if err != nil {
-		log.Println("Error: No credentials set")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "no credential found",
-		}
-		json.NewEncoder(w).Encode(resp)
-		return
-	}
-
-	// Create the client.
-	client := s3.NewFromConfig(cfg)
 
 	// Presign the client.
 	presignClient := s3.NewPresignClient(client)

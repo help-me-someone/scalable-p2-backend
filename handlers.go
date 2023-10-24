@@ -32,6 +32,9 @@ func FailResponse(w http.ResponseWriter, status int, message string) {
 
 // This API kickstarts the pipeline for saving
 func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+
+	log.Println("Handling video save.")
+
 	// Ensure the method is correct.
 	if r.Method != "POST" {
 		log.Println("Error: Not GET request")
@@ -81,6 +84,8 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	}
 	// TODO: ^^^ Clean this up, stop using headers...
 
+	log.Println("Decoding body.")
+
 	payload := struct {
 		FileName string `json:"file_name"`
 	}{}
@@ -89,14 +94,6 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		FailResponse(w, http.StatusBadRequest, "Failed to retrieve file name.")
 		return
 	}
-
-	// Create the new entry.
-	var buf bytes.Buffer
-	json.NewEncoder(&buf).Encode(map[string]interface{}{
-		"name":       payload.FileName,
-		"key":        video_name, // TODO: Fix misleading name.
-		"owner_name": user,
-	})
 
 	// Add the new video entry to the database
 	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
@@ -111,8 +108,6 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 		FailResponse(w, http.StatusInternalServerError, "Create user request failed.")
 		return
 	}
-
-	log.Println("Added the video to the database!")
 
 	// Queue the task.
 	info, err := queueConn.Enqueue(t1)
@@ -136,12 +131,7 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if r.Method != "GET" {
 		log.Println("Error: Not GET request")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "invalid method",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusBadRequest, "Invalid method.")
 		return
 	}
 
@@ -150,12 +140,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 
 	if len(username) == 0 {
 		log.Println("Username not specified")
-		w.WriteHeader(http.StatusBadRequest)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "Error: username not specified.",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusBadRequest, "Username not specified.")
 		return
 	}
 
@@ -165,6 +150,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 	client, err := GetS3Client(region)
 	if err != nil {
 		FailResponse(w, http.StatusInternalServerError, "Failed to get s3 client.")
+		return
 	}
 
 	// Presign the client.
@@ -182,17 +168,10 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 	})
 
 	if err != nil {
-		log.Println("Can't retrieve pre-signed object")
-		w.WriteHeader(http.StatusInternalServerError)
-		resp := map[string]interface{}{
-			"success": false,
-			"message": "error retrieving pre-signed object",
-		}
-		json.NewEncoder(w).Encode(resp)
+		FailResponse(w, http.StatusInternalServerError, "Error retrieving presigned object.")
 		return
 	}
 
-	fmt.Println("The URL: ", response.URL)
 	resp := map[string]interface{}{
 		"success": true,
 		"url":     response.URL,

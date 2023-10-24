@@ -77,6 +77,8 @@ github.com/help-me-someone/scalable-p2-db v0.0.0-20231024085821-ce65958ae4fe h1:
 github.com/help-me-someone/scalable-p2-db v0.0.0-20231024085821-ce65958ae4fe/go.mod h1:BTOiq+BRnS0Z63IffLN6ZENZ/6hkqAPkZc6fdt7merU=
 github.com/help-me-someone/scalable-p2-db v0.0.0-20231024091338-5d0ca58d4cb1 h1:IBSml4Su47+NTcOKClC/DaebvnoPn/Io3LxMWfFWCqI=
 github.com/help-me-someone/scalable-p2-db v0.0.0-20231024091338-5d0ca58d4cb1/go.mod h1:BTOiq+BRnS0Z63IffLN6ZENZ/6hkqAPkZc6fdt7merU=
+github.com/help-me-someone/scalable-p2-db v0.0.0-20231024122720-12251571bffa h1:+3OkCrx8vEPeA2ZK8Gs0os5Hsv6pscsuyHSGv8kiBSY=
+github.com/help-me-someone/scalable-p2-db v0.0.0-20231024122720-12251571bffa/go.mod h1:BTOiq+BRnS0Z63IffLN6ZENZ/6hkqAPkZc6fdt7merU=
 github.com/help-me-someone/scalable-p2-tasks v0.0.0-20231014080108-ad60cceeb8bc h1:kPbkvW9jRMD53whjhG+LPs/OE3rish0vLiJTzii7TLc=
 github.com/help-me-someone/scalable-p2-tasks v0.0.0-20231014080108-ad60cceeb8bc/go.mod h1:ggKqkXq97YXPLFs3T86DZkayBnZvfaqvhQwVM25reok=
 github.com/hibiken/asynq v0.24.1 h1:+5iIEAyA9K/lcSPvx3qoPtsKJeKI5u9aOIvUmSsazEw=

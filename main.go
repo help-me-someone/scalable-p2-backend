@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	db "github.com/help-me-someone/scalable-p2-db"
+	"github.com/help-me-someone/scalable-p2-db"
 	"github.com/help-me-someone/scalable-p2-db/models/user"
 	"github.com/help-me-someone/scalable-p2-db/models/video"
 	"github.com/hibiken/asynq"

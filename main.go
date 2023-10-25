@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -23,6 +24,7 @@ var (
 	DB_USERNAME    string
 	DB_PASSWORD    string
 	DB_IP          string
+	REDIS_IP       string
 	MODE           string
 )
 
@@ -31,6 +33,7 @@ func loadEnvs() {
 	DB_USERNAME = os.Getenv("DB_USERNAME")
 	DB_PASSWORD = os.Getenv("DB_PASSWORD")
 	DB_IP = os.Getenv("DB_IP")
+	REDIS_IP = os.Getenv("REDIS_IP")
 	MODE = os.Getenv("MODE")
 }
 
@@ -45,9 +48,10 @@ func main() {
 		log.Println("Database initialized!")
 	}
 
+	redisArr := fmt.Sprintf("%s:6379", REDIS_IP)
 	taskQueueHandler := &TaskQueueHandler{
 		Connection: asynq.NewClient(asynq.RedisClientOpt{
-			Addr: "redis:6379",
+			Addr: redisArr,
 		}),
 	}
 
@@ -78,6 +82,7 @@ func main() {
 			"Hx-Trigger",
 			"Content-Type",
 			"X-Custom-Header",
+			"X-Username",
 			"*",
 		},
 		AllowedMethods: []string{

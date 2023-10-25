@@ -144,7 +144,9 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	enableCors(&w)
+	log.Println("Allowing origin:", ALLOWED_ORIGIN)
+	w.Header().Set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
 	client, err := GetS3Client(region)
 	if err != nil {

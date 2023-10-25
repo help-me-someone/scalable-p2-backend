@@ -18,12 +18,14 @@ const (
 )
 
 var (
-	DB_USERNAME string
-	DB_PASSWORD string
-	DB_IP       string
+	ALLOWED_ORIGIN string
+	DB_USERNAME    string
+	DB_PASSWORD    string
+	DB_IP          string
 )
 
 func loadEnvs() {
+	ALLOWED_ORIGIN = os.Getenv("ALLOWED_ORIGIN")
 	DB_USERNAME = os.Getenv("DB_USERNAME")
 	DB_PASSWORD = os.Getenv("DB_PASSWORD")
 	DB_IP = os.Getenv("DB_IP")
@@ -66,7 +68,7 @@ func main() {
 
 // TODO: Clean this up maybe.
 func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
+	(*w).Header().Set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
 	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
 

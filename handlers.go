@@ -144,8 +144,7 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	enableCors(&w)
 
 	client, err := GetS3Client(region)
 	if err != nil {
@@ -206,7 +205,7 @@ func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		return
 	}
 
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8000")
+	w.Header().Set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
 	w.Header().Set("Access-Control-Allow-Headers", "*")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 

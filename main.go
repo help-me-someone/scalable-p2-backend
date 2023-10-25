@@ -11,6 +11,7 @@ import (
 	"github.com/help-me-someone/scalable-p2-db/models/video"
 	"github.com/hibiken/asynq"
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/cors"
 )
 
 const (
@@ -22,6 +23,7 @@ var (
 	DB_USERNAME    string
 	DB_PASSWORD    string
 	DB_IP          string
+	MODE           string
 )
 
 func loadEnvs() {
@@ -29,6 +31,7 @@ func loadEnvs() {
 	DB_USERNAME = os.Getenv("DB_USERNAME")
 	DB_PASSWORD = os.Getenv("DB_PASSWORD")
 	DB_IP = os.Getenv("DB_IP")
+	MODE = os.Getenv("MODE")
 }
 
 func main() {
@@ -62,14 +65,35 @@ func main() {
 	mux.GET("/video/rank/:rank", GetVideoByRank)
 	mux.GET("/users/:user/videos", GetUserVideos)
 
-	log.Println("Server started successfully, listening on port 7000.")
-	log.Fatal(http.ListenAndServe(":7000", mux))
-}
+	handler := cors.New(cors.Options{
+		AllowedOrigins:   []string{ALLOWED_ORIGIN},
+		AllowCredentials: true,
+		AllowedHeaders: []string{
+			"Hx-Current-Url",
+			"Hx-Request",
+			"Hx-Target",
+			"Hx-Boosted",
+			"Hx-Current-Url",
+			"Hx-Request",
+			"Hx-Trigger",
+			"Content-Type",
+			"X-Custom-Header",
+			"*",
+		},
+		AllowedMethods: []string{
+			"POST",
+			"GET",
+			"PUT",
+			"OPTIONS",
+			"*",
+		},
 
-// TODO: Clean this up maybe.
-func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
-	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		// Enable Debugging for testing, consider disabling in production
+		Debug: (MODE == "DEBUG"),
+	}).Handler(mux)
+
+	log.Println("Server started successfully, listening on port 7000.")
+	log.Fatal(http.ListenAndServe(":7000", handler))
 }
 
 type TaskQueueHandler struct {

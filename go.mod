@@ -38,6 +38,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/redis/go-redis/v9 v9.0.3 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
+	github.com/rs/cors v1.10.1 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
 	github.com/u2takey/ffmpeg-go v0.5.0 // indirect
 	github.com/u2takey/go-utils v0.3.1 // indirect

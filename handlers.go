@@ -144,10 +144,6 @@ func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.
 		return
 	}
 
-	log.Println("Allowing origin:", ALLOWED_ORIGIN)
-	w.Header().Set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
 	client, err := GetS3Client(region)
 	if err != nil {
 		FailResponse(w, http.StatusInternalServerError, "Failed to get s3 client.")
@@ -206,10 +202,6 @@ func VideoHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 		json.NewEncoder(w).Encode(resp)
 		return
 	}
-
-	w.Header().Set("Access-Control-Allow-Origin", ALLOWED_ORIGIN)
-	w.Header().Set("Access-Control-Allow-Headers", "*")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader((buf.Bytes())))
 }

@@ -4,8 +4,9 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 
-	"github.com/help-me-someone/scalable-p2-db"
+	db "github.com/help-me-someone/scalable-p2-db"
 	"github.com/help-me-someone/scalable-p2-db/models/user"
 	"github.com/help-me-someone/scalable-p2-db/models/video"
 	"github.com/hibiken/asynq"
@@ -13,13 +14,25 @@ import (
 )
 
 const (
-	region      = "sgp1"
-	DB_USERNAME = "user"
-	DB_PASSWORD = "password"
-	DB_IP       = "mysql:3306"
+	region = "sgp1"
 )
 
+var (
+	DB_USERNAME string
+	DB_PASSWORD string
+	DB_IP       string
+)
+
+func loadEnvs() {
+	DB_USERNAME = os.Getenv("DB_USERNAME")
+	DB_PASSWORD = os.Getenv("DB_PASSWORD")
+	DB_IP = os.Getenv("DB_IP")
+}
+
 func main() {
+	// Retrieve all environment variables.
+	loadEnvs()
+
 	// Initalize the database.
 	toktik_db, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
 	if !toktik_db.Migrator().HasTable(&user.User{}) && !toktik_db.Migrator().HasTable(&video.Video{}) {

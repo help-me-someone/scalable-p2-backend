@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.19.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.40.2
 	github.com/dchest/uniuri v1.2.0
-	github.com/help-me-someone/scalable-p2-db v0.0.0-20231024132804-913e7f22fc66
+	github.com/help-me-someone/scalable-p2-db v0.0.0-20231113154021-daedd8a3c1e2
 	github.com/hibiken/asynq v0.24.1
 	github.com/julienschmidt/httprouter v1.3.0
 )

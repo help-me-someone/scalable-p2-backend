@@ -221,6 +221,7 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 	// Search for the entry.
 	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
 	vid, _ := crud.GetUserVideoFromUsername(connection, username, videoName)
+	likeCount := crud.GetVideoLikeCount(connection, vid.ID)
 
 	// Create the presigned url for the thumbnail.
 	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoName)
@@ -242,6 +243,7 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 		"success":   true,
 		"message":   "Video found.",
 		"video":     vid,
+		"likes":     likeCount,
 		"thumbnail": url,
 	})
 }
@@ -252,18 +254,38 @@ func HandleVideoInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params
 func HandleVideoWatchInfo(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	// We only have the video name.
 	videoName := p.ByName("video")
-	username := p.ByName("user")
-	if len(videoName) == 0 || len(username) == 0 {
+	videoOwnerUsername := p.ByName("user")
+	if len(videoName) == 0 || len(videoOwnerUsername) == 0 {
 		FailResponse(w, http.StatusBadRequest, "Video name/username not specified.")
 		return
 	}
 
+	username := r.Header.Get("X-Username")
+	log.Println("Current active username:", username)
+
 	// Search for the entry.
 	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
-	vid, _ := crud.GetUserVideoFromUsername(connection, username, videoName)
+	vid, _ := crud.GetUserVideoFromUsername(connection, videoOwnerUsername, videoName)
+
+	// Search for like count.
+	likeCount := crud.GetVideoLikeCount(connection, vid.ID)
+
+	// Get the current active user.
+	usr, _ := crud.GetUserByName(connection, username)
+	log.Println("Current user: ", usr.Username)
+
+	fmt.Println("Username: ", username)
+	fmt.Println("Video Name: ", videoName)
+	videoLike, _ := crud.GetVideoLikeFromName(connection, username, videoName)
+	fmt.Printf("%+v\n", videoLike)
+
+	isLiked := false
+	if videoLike != nil {
+		isLiked = videoLike.Like
+	}
 
 	// Create the presigned url for the thumbnail.
-	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", username, videoName)
+	thumbnailKey := fmt.Sprintf("users/%s/videos/%s/thumbnail", videoOwnerUsername, videoName)
 	client, err := GetS3Client(region)
 	if err != nil {
 		log.Println("Could not create s3 client.")
@@ -287,10 +309,13 @@ func HandleVideoWatchInfo(w http.ResponseWriter, r *http.Request, p httprouter.P
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":   true,
-		"message":   "Video found.",
-		"video":     vid,
-		"thumbnail": url,
+		"success":    true,
+		"message":    "Video found.",
+		"video":      vid,
+		"thumbnail":  url,
+		"like_count": likeCount,
+		"uid":        usr.ID,
+		"liked":      isLiked,
 	})
 }
 

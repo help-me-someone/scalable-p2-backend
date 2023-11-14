@@ -8,8 +8,6 @@ import (
 	"os"
 
 	db "github.com/help-me-someone/scalable-p2-db"
-	"github.com/help-me-someone/scalable-p2-db/models/user"
-	"github.com/help-me-someone/scalable-p2-db/models/video"
 	"github.com/hibiken/asynq"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/cors"
@@ -43,10 +41,7 @@ func main() {
 
 	// Initalize the database.
 	toktik_db, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
-	if !toktik_db.Migrator().HasTable(&user.User{}) && !toktik_db.Migrator().HasTable(&video.Video{}) {
-		db.InitTables(toktik_db)
-		log.Println("Database initialized!")
-	}
+	db.InitTables(toktik_db)
 
 	redisArr := fmt.Sprintf("%s:6379", REDIS_IP)
 	taskQueueHandler := &TaskQueueHandler{

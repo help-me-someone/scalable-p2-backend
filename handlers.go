@@ -162,6 +162,14 @@ func HandleVideoComment(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 		log.Println("HandleVideoComment - Error - Failed to create video comment entry.")
 		return
 	}
+
+	// Now we need to notify everyone involved.
+	participants, err := crud.GetVideoNotificiationRecipients(connection, uint(videoID))
+
+	for _, participant := range participants {
+		crud.CreateVideoNotification(connection, uint(videoID), participant.UserID)
+	}
+
 	fmt.Printf("%+v\n", vid)
 }
 

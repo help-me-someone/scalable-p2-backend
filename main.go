@@ -58,6 +58,7 @@ func main() {
 	mux := httprouter.New()
 	mux.GET("/upload", GetUploadPresignedUrl)
 	mux.POST("/save", taskQueueHandler.TaskMiddleware(HandleVideoSave))
+	mux.POST("/comment", HandleVideoComment)
 
 	// The following endpoint uses database:
 	mux.GET("/users/:user/videos/:video", VideoHandler)

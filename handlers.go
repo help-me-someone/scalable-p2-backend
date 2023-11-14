@@ -128,6 +128,43 @@ func HandleVideoSave(w http.ResponseWriter, r *http.Request, _ httprouter.Params
 	log.Printf(" [*] Successfully enqueued task: %+v", info)
 }
 
+// Add a new comment from user.
+func HandleVideoComment(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+
+	fmt.Println("Printing from HandleVideoComment")
+
+	videoComment := &struct {
+		Comment string
+		UserID  uint
+		VideoID uint
+	}{}
+
+	userID, err := strconv.Atoi(r.FormValue("user_id"))
+	if err != nil {
+		log.Println("Something bad happened at HandleVideoComment [1]")
+		return
+	}
+
+	videoID, err := strconv.Atoi(r.FormValue("video_id"))
+	if err != nil {
+		log.Println("Something bad happened at HandleVideoComment [2]")
+		return
+	}
+
+	videoComment.Comment = r.FormValue("comment")
+	videoComment.UserID = uint(userID)
+	videoComment.VideoID = uint(videoID)
+
+	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
+
+	vid, err := crud.CreateVideoComment(connection, videoComment.VideoID, videoComment.UserID, videoComment.Comment)
+	if err != nil {
+		log.Println("HandleVideoComment - Error - Failed to create video comment entry.")
+		return
+	}
+	fmt.Printf("%+v\n", vid)
+}
+
 func GetUploadPresignedUrl(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	if r.Method != "GET" {
 		log.Println("Error: Not GET request")

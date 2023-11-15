@@ -135,9 +135,15 @@ func HandleVideoComment(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 
 	videoComment := &struct {
 		Comment string
-		UserID  uint
+		ActorID uint
 		VideoID uint
 	}{}
+
+	videoComment.Comment = r.FormValue("comment")
+
+	if len(videoComment.Comment) == 0 {
+		return
+	}
 
 	userID, err := strconv.Atoi(r.FormValue("user_id"))
 	if err != nil {
@@ -151,13 +157,12 @@ func HandleVideoComment(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 		return
 	}
 
-	videoComment.Comment = r.FormValue("comment")
-	videoComment.UserID = uint(userID)
+	videoComment.ActorID = uint(userID)
 	videoComment.VideoID = uint(videoID)
 
 	connection, _ := GetDatabaseConnection(DB_USERNAME, DB_PASSWORD, DB_IP)
 
-	vid, err := crud.CreateVideoComment(connection, videoComment.VideoID, videoComment.UserID, videoComment.Comment)
+	vid, err := crud.CreateVideoComment(connection, videoComment.VideoID, videoComment.ActorID, videoComment.Comment)
 	if err != nil {
 		log.Println("HandleVideoComment - Error - Failed to create video comment entry.")
 		return
@@ -167,7 +172,7 @@ func HandleVideoComment(w http.ResponseWriter, r *http.Request, _ httprouter.Par
 	participants, err := crud.GetVideoNotificiationRecipients(connection, uint(videoID))
 
 	for _, participant := range participants {
-		crud.CreateVideoNotification(connection, uint(videoID), participant.UserID)
+		crud.CreateVideoNotification(connection, uint(videoID), videoComment.ActorID, participant.UserID, video.Comment)
 	}
 
 	fmt.Printf("%+v\n", vid)
